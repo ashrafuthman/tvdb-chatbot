@@ -212,6 +212,10 @@ function buildSearchOptions(plan: SearchPlan, limit: number): SearchOptions {
     year: plan.query.year,
     country: plan.query.country,
     language: plan.query.language,
+    director: plan.query.director,
+    primaryType: plan.query.primaryType,
+    remoteId: plan.query.remote_id,
+    offset: plan.query.offset,
     limit
   };
 }

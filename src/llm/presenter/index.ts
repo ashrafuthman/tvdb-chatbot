@@ -1,30 +1,33 @@
-import { appConfig } from '../../config/index.js';
-import { openaiClient } from '../../infra/openaiClient.js';
+import type { BaseMessageLike } from '@langchain/core/messages';
+import { presenterModel } from '../../infra/openaiClient.js';
 import type { SearchPlan } from '../planner/index.js';
 import type { TvdbSeries } from '../../services/tvdb/series/index.js';
+import { extractMessageText } from '../messageUtils.js';
 import { presentationSystemPrompt } from './constants.js';
+
+const presenterSystemMessage: BaseMessageLike = {
+  role: 'system',
+  content: presentationSystemPrompt
+};
+
+function buildPresenterMessages(payload: string): BaseMessageLike[] {
+  return [presenterSystemMessage, { role: 'user', content: payload }];
+}
 
 export async function summarizeRecommendations(
   userMessage: string,
   searchPlan: SearchPlan,
   tvdbResults: TvdbSeries[]
 ): Promise<string> {
-  const response = await openaiClient.responses.create({
-    model: appConfig.openaiModel,
-    input: [
-      { role: 'system', content: presentationSystemPrompt },
-      {
-        role: 'user',
-        content: JSON.stringify({
-          userMessage,
-          searchPlan,
-          tvdbResults
-        })
-      }
-    ],
-    max_output_tokens: 400,
-    temperature: 0.2
+  const payload = JSON.stringify({
+    userMessage,
+    searchPlan,
+    tvdbResults
   });
 
-  return response.output_text?.trim() || 'No summary available.';
+  const response = await presenterModel.invoke(
+    buildPresenterMessages(payload) as unknown as Parameters<typeof presenterModel.invoke>[0]
+  );
+  const summary = extractMessageText(response).trim();
+  return summary || 'No summary available.';
 }

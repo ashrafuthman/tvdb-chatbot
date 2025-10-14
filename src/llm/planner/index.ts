@@ -1,12 +1,22 @@
-import { appConfig } from '../../config/index.js';
-import { openaiClient } from '../../infra/openaiClient.js';
+import type { BaseMessageLike } from '@langchain/core/messages';
+import { plannerModel } from '../../infra/openaiClient.js';
 import type { ConversationState } from '../../state/conversationMemory.js';
+import { extractMessageText } from '../messageUtils.js';
 import { defaultSearchLimit, systemInstruction } from './constants.js';
 import type { SearchPlan } from './types.js';
 import { clampLimit, normalizeSearchPlan } from './utils.js';
 
 export type { SearchPlan, SearchPlanQuery } from './types.js';
 export { defaultSearchLimit } from './constants.js';
+
+const plannerSystemMessage: BaseMessageLike = {
+  role: 'system',
+  content: systemInstruction
+};
+
+function buildPlannerMessages(payload: string): BaseMessageLike[] {
+  return [plannerSystemMessage, { role: 'user', content: payload }];
+}
 
 export async function planSearch(
   userMessage: string,
@@ -17,26 +27,15 @@ export async function planSearch(
     throw new Error('Please provide a search query.');
   }
 
-  const response = await openaiClient.responses.create({
-    model: appConfig.openaiModel,
-    input: [
-      {
-        role: 'system',
-        content: systemInstruction
-      },
-      {
-        role: 'user',
-        content: JSON.stringify({
-          query: trimmedMessage,
-          conversationState
-        })
-      }
-    ],
-    max_output_tokens: 512,
-    temperature: 0.2
+  const payload = JSON.stringify({
+    query: trimmedMessage,
+    conversationState
   });
 
-  const rawOutput = response.output_text?.trim();
+  const response = await plannerModel.invoke(
+    buildPlannerMessages(payload) as unknown as Parameters<typeof plannerModel.invoke>[0]
+  );
+  const rawOutput = extractMessageText(response).trim();
   if (!rawOutput) {
     throw new Error('OpenAI returned an empty plan.');
   }
@@ -49,7 +48,54 @@ export async function planSearch(
     throw new Error('OpenAI returned invalid JSON for the search plan.');
   }
 
-  return normalizeSearchPlan(parsed);
+  const patched = patchMissingQuery(parsed, conversationState);
+  return normalizeSearchPlan(patched);
+}
+
+function patchMissingQuery(parsed: unknown, conversationState: ConversationState): unknown {
+  if (!parsed || typeof parsed !== 'object') {
+    return parsed;
+  }
+
+  const record = parsed as Record<string, unknown>;
+  if (record.strategy !== 'reuse-results') {
+    return parsed;
+  }
+
+  const lastSearchTerm = conversationState.lastSearchTerm?.trim();
+  if (!lastSearchTerm) {
+    return parsed;
+  }
+
+  const queryRecord = (record.query && typeof record.query === 'object'
+    ? (record.query as Record<string, unknown>)
+    : (record.query = {} as Record<string, unknown>));
+
+  if (!isNonEmptyString(queryRecord.query)) {
+    queryRecord.query = lastSearchTerm;
+  }
+
+  if (!isNonEmptyString(queryRecord.q)) {
+    queryRecord.q = lastSearchTerm;
+  }
+
+  if (!isFiniteNumber(queryRecord.limit)) {
+    queryRecord.limit = conversationState.lastResults.length || defaultSearchLimit;
+  }
+
+  if (!isFiniteNumber(queryRecord.offset)) {
+    queryRecord.offset = 0;
+  }
+
+  return parsed;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 export function deriveSearchLimit(plan: SearchPlan, fallback = defaultSearchLimit): number {

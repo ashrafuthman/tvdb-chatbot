@@ -46,7 +46,18 @@ export function normalizeQuery(candidate: unknown): SearchPlanQuery {
   }
 
   const record = candidate as Record<string, unknown>;
-  const primaryQuery = normalizeRequiredString(record.query, 'query');
+
+  const rawQuery = typeof record.query === 'string' && record.query.trim().length > 0
+    ? record.query
+    : typeof record.q === 'string' && record.q.trim().length > 0
+    ? record.q
+    : null;
+
+  if (!rawQuery) {
+    throw new Error('Search plan query did not include a value for query or q.');
+  }
+
+  const primaryQuery = rawQuery.trim();
   const qValue = normalizeOptionalString(record.q) ?? primaryQuery;
 
   const normalizedLimit = normalizeOptionalNumber(record.limit);

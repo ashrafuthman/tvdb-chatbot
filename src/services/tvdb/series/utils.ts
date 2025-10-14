@@ -37,6 +37,21 @@ export function buildSearchParams(
   if (language) {
     params.language = language;
   }
+  const director = coalesceString(options.director ?? undefined);
+  if (director) {
+    params.director = director;
+  }
+  const primaryType = coalesceString(options.primaryType ?? undefined);
+  if (primaryType) {
+    params.primaryType = primaryType;
+  }
+  const remoteId = coalesceString(options.remoteId ?? undefined);
+  if (remoteId) {
+    params.remote_id = remoteId;
+  }
+  if (typeof options.offset === 'number' && Number.isFinite(options.offset) && options.offset >= 0) {
+    params.offset = String(Math.trunc(options.offset));
+  }
 
   return params;
 }

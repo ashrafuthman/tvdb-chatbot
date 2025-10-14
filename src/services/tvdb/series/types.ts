@@ -13,5 +13,9 @@ export type SearchOptions = {
   year?: number | null;
   country?: string | null;
   language?: string | null;
+  director?: string | null;
+  primaryType?: string | null;
+  remoteId?: string | null;
+  offset?: number | null;
   limit?: number | null;
 };
