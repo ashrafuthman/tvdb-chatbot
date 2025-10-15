@@ -1,11 +1,5 @@
-import type { TvdbSeries } from '../services/tvdb/series/index.js';
+import { type ConversationState } from './types.js';
 
-export type ConversationState = {
-  lastSearchTerm: string | null;
-  lastResultTitle: string | null;
-  lastResultIds: number[];
-  lastResults: TvdbSeries[];
-};
 
 const conversationState: ConversationState = {
   lastSearchTerm: null,
@@ -18,7 +12,7 @@ export function getConversationState(): ConversationState {
   return {
     ...conversationState,
     lastResultIds: [...conversationState.lastResultIds],
-    lastResults: conversationState.lastResults.map(cloneSeries)
+    lastResults: conversationState.lastResults
   };
 }
 
@@ -33,23 +27,7 @@ export function updateConversationState(update: Partial<ConversationState>): voi
     conversationState.lastResultIds = [...update.lastResultIds];
   }
   if (update.lastResults !== undefined) {
-    conversationState.lastResults = update.lastResults.map(cloneSeries);
+    conversationState.lastResults = update.lastResults;
   }
 }
 
-export function resetConversationState(): void {
-  conversationState.lastSearchTerm = null;
-  conversationState.lastResultTitle = null;
-  conversationState.lastResultIds = [];
-  conversationState.lastResults = [];
-}
-
-function cloneSeries(entry: TvdbSeries): TvdbSeries {
-  return {
-    id: entry.id,
-    name: entry.name,
-    overview: entry.overview,
-    firstAired: entry.firstAired,
-    entityType: entry.entityType
-  };
-}

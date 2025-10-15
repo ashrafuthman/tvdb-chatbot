@@ -1,9 +1,5 @@
 import type { BaseMessage } from '@langchain/core/messages';
 
-/**
- * Extract plain text content from a LangChain message response, regardless of
- * whether the content is a string or structured message parts.
- */
 export function extractMessageText(message: BaseMessage | { content?: unknown } | null | undefined): string {
   if (!message || typeof message !== 'object') {
     return '';

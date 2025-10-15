@@ -13,7 +13,7 @@ type TvdbLoginResponse = {
   };
 };
 
-const tokenTtlMs = 1000 * 60 * 55; // refresh slightly before the default one-hour expiry.
+const tokenTtlMs = 1000 * 60 * 55;
 let cachedToken: AuthToken | null = null;
 
 const tvdbHttpClient: AxiosInstance = axios.create({
@@ -32,7 +32,7 @@ export async function withTvdbClient<T>(
     if (isUnauthorizedError(error)) {
       cachedToken = null;
       token = await resolveToken();
-      return operation(tvdbHttpClient, token);
+      return await operation(tvdbHttpClient, token);
     }
     throw error;
   }

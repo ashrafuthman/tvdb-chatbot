@@ -1,21 +1,13 @@
 import * as readlineSync from 'readline-sync';
 import {
-  deriveSearchLimit,
-  deriveSearchTerm,
   planSearch,
-  type SearchPlan
 } from '../llm/planner/index.js';
-import { searchSeries, type SearchOptions, type TvdbSeries } from '../services/tvdb/series/index.js';
+import { searchSeries } from '../services/tvdb/series/index.js';
 import { getConversationState, updateConversationState } from '../state/conversationMemory.js';
 import { summarizeRecommendations } from '../llm/presenter/index.js';
+import { type TvdbEntity } from '../services/tvdb/series/types.js';
+import { type SearchPlan } from '../llm/planner/types.js';
 
-type Recommendation = {
-  id: number;
-  title: string;
-  overview: string;
-  firstAiredYear: string;
-  entityType: 'series' | 'movie';
-};
 
 const reusePhrases = [
   'any of those',
@@ -56,7 +48,7 @@ export async function runCli(): Promise<void> {
     try {
       const conversationState = getConversationState();
       const plan = await planSearch(trimmedInput, conversationState);
-
+      console.debug('1.Search plan:', plan);
       if (
         plan.strategy === 'fresh-search' &&
         conversationState.lastResults.length > 0 &&
@@ -69,15 +61,11 @@ export async function runCli(): Promise<void> {
         console.log(`Plan: ${plan.explanation}`);
       }
 
-      const limit = deriveSearchLimit(plan);
-      const searchTerm = deriveSearchTerm(plan);
+      const searchTerm = plan.query.query;
+      const results = await resolveResults(plan, conversationState, searchTerm);
+      console.debug('2.Raw results:', results);
 
-      const results = await resolveResults(plan, conversationState, limit, searchTerm);
-
-      console.debug('results', results);
-      const recommendations = deriveRecommendations(results);
-
-      if (recommendations.length === 0) {
+      if (results.length === 0) {
         console.log('No TVDB matches found.');
         if (plan.followUpSuggestions.length > 0) {
           console.log(`Try asking: ${plan.followUpSuggestions[0]}`);
@@ -86,6 +74,7 @@ export async function runCli(): Promise<void> {
       }
 
       const summary = await summarizeRecommendations(trimmedInput, plan, results);
+      console.debug('3.Summary:', summary);
       console.log('\n' + summary + '\n');
 
       updateConversationState({
@@ -95,11 +84,6 @@ export async function runCli(): Promise<void> {
         lastResults: results
       });
 
-      if (process.env.DEBUG_TVDB_RESULTS === '1') {
-        recommendations.forEach((recommendation) => {
-          console.log(formatRecommendation(recommendation));
-        });
-      }
 
       if (plan.followUpSuggestions.length > 0) {
         console.log(`Next: ${plan.followUpSuggestions.join(' | ')}`);
@@ -111,53 +95,29 @@ export async function runCli(): Promise<void> {
   }
 }
 
-function formatRecommendation(recommendation: Recommendation): string {
-  const typeLabel = recommendation.entityType === 'movie' ? 'Movie' : 'Series';
-  return `${typeLabel}: ${recommendation.title} (${recommendation.firstAiredYear}) - ${recommendation.overview} - TVDB id: ${recommendation.id}`;
-}
-
-function deriveRecommendations(series: TvdbSeries[] = []): Recommendation[] {
-  return series.map((entry) => ({
-    id: entry.id,
-    title: entry.name,
-    overview: entry.overview ?? 'Overview not available from TVDB.',
-    firstAiredYear: deriveYear(entry.firstAired),
-    entityType: entry.entityType
-  }));
-}
 
 function applyPlanToCachedResults(
-  cachedResults: TvdbSeries[],
+  cachedResults: TvdbEntity[],
   plan: SearchPlan,
-  limit: number
-): TvdbSeries[] {
+): TvdbEntity[] {
   let filtered = cachedResults.slice();
 
-  const entityType = normalizeEntityTypeForSearch(plan.query.type);
-  if (entityType) {
-    filtered = filtered.filter((entry) => entry.entityType === entityType);
+  if (plan.query.type) {
+    filtered = filtered.filter((entry) => entry.type === plan.query.type);
   }
 
   if (typeof plan.query.year === 'number' && Number.isFinite(plan.query.year)) {
     filtered = filtered.filter((entry) => {
-      const airedYear = parseFirstAiredYear(entry.firstAired);
+      const airedYear = parseFirstAiredYear(entry.first_air_time);
       return airedYear !== null && airedYear >= (plan.query.year as number);
     });
   }
 
-  if (limit > 0) {
-    filtered = filtered.slice(0, limit);
+  if (plan.query.limit > 0) {
+    filtered = filtered.slice(0, plan.query.limit);
   }
 
   return filtered;
-}
-
-function deriveYear(firstAired: string | null): string {
-  if (!firstAired) {
-    return 'Year unavailable';
-  }
-  const year = new Date(firstAired).getFullYear();
-  return Number.isNaN(year) ? 'Year unavailable' : String(year);
 }
 
 function parseFirstAiredYear(firstAired: string | null): number | null {
@@ -181,43 +141,17 @@ function shouldForceReuse(message: string): boolean {
   return reusePhrases.some((phrase) => normalized.includes(phrase));
 }
 
-function normalizeEntityTypeForSearch(
-  type: 'series' | 'movie' | 'person' | 'company' | null
-): 'series' | 'movie' | undefined {
-  if (type === 'series' || type === 'movie') {
-    return type;
-  }
-  return undefined;
-}
 
 async function resolveResults(
   plan: SearchPlan,
   conversationState: ReturnType<typeof getConversationState>,
-  limit: number,
   searchTerm: string
-): Promise<TvdbSeries[]> {
+): Promise<TvdbEntity[]> {
   if (plan.strategy === 'reuse-results' && conversationState.lastResults.length > 0) {
-    return applyPlanToCachedResults(conversationState.lastResults, plan, limit);
+    return applyPlanToCachedResults(conversationState.lastResults, plan);
   }
 
-  const searchOptions = buildSearchOptions(plan, limit);
-  return searchSeries(searchTerm, limit, searchOptions);
-}
-
-function buildSearchOptions(plan: SearchPlan, limit: number): SearchOptions {
-  return {
-    entityType: normalizeEntityTypeForSearch(plan.query.type),
-    network: plan.query.network,
-    company: plan.query.company,
-    year: plan.query.year,
-    country: plan.query.country,
-    language: plan.query.language,
-    director: plan.query.director,
-    primaryType: plan.query.primaryType,
-    remoteId: plan.query.remote_id,
-    offset: plan.query.offset,
-    limit
-  };
+  return searchSeries(searchTerm, plan.query);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -1,13 +1,10 @@
 import type { BaseMessageLike } from '@langchain/core/messages';
 import { plannerModel } from '../../infra/openaiClient.js';
-import type { ConversationState } from '../../state/conversationMemory.js';
+import type { ConversationState } from '../../state/types.js';
 import { extractMessageText } from '../messageUtils.js';
 import { defaultSearchLimit, systemInstruction } from './constants.js';
 import type { SearchPlan } from './types.js';
-import { clampLimit, normalizeSearchPlan } from './utils.js';
-
-export type { SearchPlan, SearchPlanQuery } from './types.js';
-export { defaultSearchLimit } from './constants.js';
+import { normalizeSearchPlan } from './utils.js';
 
 const plannerSystemMessage: BaseMessageLike = {
   role: 'system',
@@ -40,16 +37,15 @@ export async function planSearch(
     throw new Error('OpenAI returned an empty plan.');
   }
 
-  let parsed: unknown;
+  let parsed: undefined | SearchPlan;
   try {
     parsed = JSON.parse(rawOutput);
-    console.debug('parsed Data:', parsed);
   } catch (error) {
     throw new Error('OpenAI returned invalid JSON for the search plan.');
   }
 
   const patched = patchMissingQuery(parsed, conversationState);
-  return normalizeSearchPlan(patched);
+  return normalizeSearchPlan(patched as SearchPlan);
 }
 
 function patchMissingQuery(parsed: unknown, conversationState: ConversationState): unknown {
@@ -96,16 +92,4 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
-}
-
-export function deriveSearchLimit(plan: SearchPlan, fallback = defaultSearchLimit): number {
-  const limit = plan.query.limit;
-  if (limit === null || limit === undefined) {
-    return fallback;
-  }
-  return clampLimit(limit, fallback);
-}
-
-export function deriveSearchTerm(plan: SearchPlan): string {
-  return plan.query.query || plan.query.q;
 }

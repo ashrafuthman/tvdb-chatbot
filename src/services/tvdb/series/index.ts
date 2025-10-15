@@ -1,19 +1,18 @@
 import axios, { AxiosError } from 'axios';
 import { withTvdbClient } from '../../../infra/tvdbClient.js';
-import type { SearchOptions, TvdbSeries } from './types.js';
-import { buildSearchParams, deriveFallbackQueries, normalizeSearchResults } from './utils.js';
-
-export type { SearchOptions, TvdbSeries } from './types.js';
+import type {  TvdbResponse } from './types.js';
+import { deriveFallbackQueries } from './utils.js';
+import { type SearchPlanQuery } from '../../../llm/planner/types.js';
 
 type TvdbSearchResponse = {
-  data?: unknown;
+  data?: TvdbResponse[];
 };
 
 export async function searchSeries(
   searchTerm: string,
-  limit = 6,
-  options: SearchOptions = {}
-): Promise<TvdbSeries[]> {
+  options: SearchPlanQuery
+): Promise<any[]> {
+  console.log("search term", searchTerm)
   const term = searchTerm.trim();
   if (!term) {
     return [];
@@ -35,33 +34,26 @@ export async function searchSeries(
         }
         tried.add(normalizedKey);
 
-        for (const queryKey of ['q', 'query'] as const) {
-          try {
-            const params = buildSearchParams(normalizedCandidate, limit, options, queryKey);
-            const response = await client.get<TvdbSearchResponse>('/search', {
-              params,
-              headers: {
-                Authorization: `Bearer ${token}`
-              }
-            });
-            const normalized = normalizeSearchResults(
-              response.data,
-              limit,
-              options.entityType ?? null
-            );
-            if (normalized.length > 0) {
-              return normalized;
+        try {
+          const response = await client.get<TvdbSearchResponse>('/search', {
+            params: options,
+            headers: {
+              Authorization: `Bearer ${token}`
             }
-          } catch (error) {
-            const axiosError = error as AxiosError;
-            if (axios.isAxiosError(axiosError) && axiosError.response?.status === 400) {
-              continue;
-            }
-            throw error;
+          });
+          console.debug(`TVDB search with term "${candidate}" succeeded.`);
+          const results = response.data?.data;
+          if (Array.isArray(results) && results.length > 0) {
+            return results;
           }
+        } catch (error) {
+          const axiosError = error as AxiosError;
+          if (axios.isAxiosError(axiosError) && axiosError.response?.status === 400) {
+            continue;
+          }
+          throw error;
         }
       }
-
       return [];
     });
   } catch (error) {

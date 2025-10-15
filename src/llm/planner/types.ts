@@ -11,7 +11,7 @@ export type SearchPlanQuery = {
   network: string | null;
   remote_id: string | null;
   offset: number | null;
-  limit: number | null;
+  limit: number;
 };
 
 export type SearchPlan = {
