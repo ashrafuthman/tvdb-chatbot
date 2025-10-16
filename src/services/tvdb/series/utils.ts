@@ -1,21 +1,21 @@
 import {
-  fallbackPrefixWordCount,
   minFallbackWordLength
 } from './constants.js';
+import { CommaSeparatedListOutputParser } from '@langchain/core/output_parsers';
 
-export function deriveFallbackQueries(term: string): string[] {
+const fallbackParser = new CommaSeparatedListOutputParser();
+
+export async function deriveFallbackQueries(term: string) {
   console.debug('Deriving fallback queries for term:', term);
-  const cleaned = term.replace(/[^\w\s]/g, ' ');
-  const words = cleaned
-    .split(/\s+/)
-    .map((word) => word.trim())
-    .filter((word) => word.length > minFallbackWordLength);
+  const parsed = await fallbackParser.parse(term);
+  const seeds = parsed
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > minFallbackWordLength);
 
-  const fallback = new Set<string>();
-  fallback.add(words.slice(0, fallbackPrefixWordCount).join(' '));
-  for (const word of words) {
-    fallback.add(word);
+  if (seeds.length > 0) {
+    console.debug('Derived fallback queries (parser):', seeds);
+    return Array.from(new Set(seeds));
   }
-  console.debug('Derived fallback queries:', Array.from(fallback).filter((word) => word.length > 0));
-  return Array.from(fallback).filter((word) => word.length > 0);
+  console.debug('Deriving fallback queries (simple split)', term);
+  return [term];
 }

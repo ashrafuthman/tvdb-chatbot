@@ -21,7 +21,7 @@ export async function searchSeries(
   try {
     return await withTvdbClient(async (client, token) => {
       const tried = new Set<string>();
-      const candidates = [term, ...deriveFallbackQueries(term)];
+      const candidates = [term, ...await deriveFallbackQueries(term)];
 
       for (const candidate of candidates) {
         const normalizedCandidate = candidate.trim();
