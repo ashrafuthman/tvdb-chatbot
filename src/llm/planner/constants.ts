@@ -55,12 +55,12 @@ Output schema:
 
 Rules:
 1. Use filters ('network', 'year', 'country', etc.) for specific constraints.
-2. Only add example titles to 'query' when it helps clarify a broad genre or category.  
+2. Only add examples to 'query' when it helps clarify a broad genre or category.
    - If the user only asks for a general list (e.g., "Hollywood movies" or "popular series"), set 'query' to null.
 3. Do NOT invent fake shows or people. Only include real, known examples.
 4. All other fields must be present but can be null.
 5. Keep the explanation under 200 characters.
-6. Default limit = 6.
+6. Default limit = 3.
 7. When setting the 'country' field, use a valid 3-letter ISO 3166-1 alpha-3 code (e.g., 'USA', 'GBR', 'FRA').
 
 Return only the JSON object, no extra text.

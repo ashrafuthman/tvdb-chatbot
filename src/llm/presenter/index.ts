@@ -19,10 +19,20 @@ export async function summarizeRecommendations(
   searchPlan: SearchPlan,
   tvdbResults: TvdbEntity[]
 ): Promise<string> {
+
+  const filteredResults = tvdbResults?.map((r) => ({
+    id: r.id,
+    name: r.name,
+    overview: r.overview,
+    overview_translated: r.overview_translated,
+    first_air_time: r.first_air_time,
+    type: r.type
+  })) ?? [];
+
   const payload = JSON.stringify({
     userMessage,
     searchPlan,
-    tvdbResults
+    filteredResults
   });
 
   const response = await presenterModel.invoke(
