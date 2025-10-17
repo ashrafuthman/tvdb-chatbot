@@ -1,6 +1,6 @@
 export type SearchPlanQuery = {
   query: string;
-  q: string;
+  q: null;
   type: 'series' | 'movie' | 'person' | 'company' | null;
   year: number | null;
   company: string | null;

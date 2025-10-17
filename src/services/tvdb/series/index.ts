@@ -28,6 +28,7 @@ export async function searchSeries(
         if (!normalizedCandidate) {
           continue;
         }
+        const option = { ...options, query: normalizedCandidate };
         const normalizedKey = normalizedCandidate.toLowerCase();
         if (tried.has(normalizedKey)) {
           continue;
@@ -36,12 +37,13 @@ export async function searchSeries(
 
         try {
           const response = await client.get<TvdbSearchResponse>('/search', {
-            params: options,
+            params: option,
             headers: {
               Authorization: `Bearer ${token}`
             }
           });
           console.debug(`TVDB search with term "${candidate}" succeeded.`);
+          console.debug('TVDB raw response:', response.data);
           const results = response.data?.data;
           if (Array.isArray(results) && results.length > 0) {
             return results;
